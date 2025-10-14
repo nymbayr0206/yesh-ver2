@@ -237,7 +237,8 @@ const Quizzes = () => {
                       {result.isCorrect ? '✅ Correct!' : '❌ Incorrect'}
                     </p>
                     <p className="text-sm text-gray-300" data-testid="quiz-xp-earned">
-                      {result.isCorrect ? `You earned ${result.xpEarned} XP!` : 'Keep trying! You'll get it next time.'}\n                    </p>
+                      {result.isCorrect ? `You earned ${result.xpEarned} XP!` : 'Keep trying! You\'ll get it next time.'}
+                    </p>
                     {result.leveledUp && (
                       <p className="text-sm text-cyan-400 font-semibold mt-2" data-testid="quiz-level-up">
                         🎉 Level Up! You're now Level {result.newLevel}!
