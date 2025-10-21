@@ -1,18 +1,8 @@
-import axios from 'axios';
+import { createClient } from '@supabase/supabase-js';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://wwpiqtxvoobhhgywkkmy.supabase.co';
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3cGlxdHh2b29iaGhneXdra215Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEwMzgxMDksImV4cCI6MjA3NjYxNDEwOX0.YzGzwnlxsQ38yYu-9NU7KGTaJMbDwSCj7uEScMnnYOg';
 
-const api = axios.create({
-  baseURL: API_URL
-});
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Add token to requests
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-export default api;
+export default supabase;

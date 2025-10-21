@@ -2,12 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Zap, Target, TrendingUp, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../utils/api';
+import { supabase } from '../utils/api';
 import AITeacher from '../components/AITeacher';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { Progress } from '../components/ui/progress';
 import { useNavigate } from 'react-router-dom';
+
+const MOCK_AI_TIPS = {
+  'ENFP': 'Mix subjects for variety. Keep sessions fun and energetic!',
+  'INFP': 'Deep focus on one subject at a time. Quality over quantity!',
+  'ENTP': 'Challenge yourself with the hardest problems first!',
+  'INTP': 'Break down complex problems systematically!'
+};
 
 const Dashboard = () => {
   const { user, updateUser } = useAuth();
@@ -17,18 +24,50 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDashboardStats();
-    fetchAITip();
-  }, []);
+    if (user) {
+      fetchDashboardStats();
+      fetchAITip();
+    }
+  }, [user]);
 
   const fetchDashboardStats = async () => {
     try {
-      const res = await api.get('/dashboard/stats');
-      setStats(res.data);
-      
-      // Update user context with latest XP/Level
-      updateUser({ xp: res.data.xp, level: res.data.level, streak: res.data.streak });
+      const today = new Date().toISOString().split('T')[0];
+
+      const { data: quests } = await supabase
+        .from('daily_quests')
+        .select('*')
+        .limit(3);
+
+      const { data: userQuests } = await supabase
+        .from('student_daily_quests')
+        .select('*')
+        .eq('student_id', user.id)
+        .eq('date', today);
+
+      const questMap = {};
+      if (userQuests) {
+        userQuests.forEach(q => {
+          questMap[q.quest_id] = q;
+        });
+      }
+
+      const questsWithProgress = (quests || []).map(quest => ({
+        ...quest,
+        progress: questMap[quest.id]?.progress || 0,
+        completed: questMap[quest.id]?.completed || false
+      }));
+
+      setStats({
+        xp: user.xp || 0,
+        level: user.level || 1,
+        streak: user.streak || 0,
+        dailyQuests: questsWithProgress
+      });
+
+      updateUser({ xp: user.xp, level: user.level, streak: user.streak });
     } catch (error) {
+      console.error('Failed to load dashboard:', error);
       toast.error('Failed to load dashboard');
     } finally {
       setLoading(false);
@@ -37,8 +76,8 @@ const Dashboard = () => {
 
   const fetchAITip = async () => {
     try {
-      const res = await api.post('/ai-teacher/tip', {});
-      setAiTip(res.data.tip);
+      const mbtiCode = user?.mbti_type || 'ENFP';
+      setAiTip(MOCK_AI_TIPS[mbtiCode] || 'Keep pushing forward! Try 3 quick quizzes today!');
     } catch (error) {
       console.error('Failed to fetch AI tip');
     }

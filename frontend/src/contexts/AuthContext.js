@@ -1,56 +1,106 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import { supabase } from '../utils/api';
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
-const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (token) {
-      // Verify token and fetch user
-      axios.get(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(res => {
-        setUser(res.data);
-      })
-      .catch(() => {
-        localStorage.removeItem('token');
-        setToken(null);
-      })
-      .finally(() => setLoading(false));
-    } else {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        loadUserProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session?.user) {
+        loadUserProfile(session.user.id);
+      } else {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const loadUserProfile = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      setUser(data);
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+    } finally {
       setLoading(false);
     }
-  }, [token]);
-
-  const login = async (username, password) => {
-    const res = await axios.post(`${API_URL}/auth/login`, { username, password });
-    setToken(res.data.token);
-    setUser(res.data.user);
-    localStorage.setItem('token', res.data.token);
-    return res.data;
   };
 
   const register = async (email, username, password, grade) => {
-    const res = await axios.post(`${API_URL}/auth/register`, { email, username, password, grade });
-    setToken(res.data.token);
-    setUser(res.data.user);
-    localStorage.setItem('token', res.data.token);
-    return res.data;
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (authError) throw authError;
+
+    const { error: profileError } = await supabase
+      .from('students')
+      .insert([{
+        id: authData.user.id,
+        email,
+        username,
+        password_hash: '',
+        grade,
+        xp: 0,
+        level: 1,
+        streak: 0
+      }]);
+
+    if (profileError) throw profileError;
+
+    await loadUserProfile(authData.user.id);
+    return { user: authData.user };
   };
 
-  const logout = () => {
-    setToken(null);
+  const login = async (username, password) => {
+    const { data: student } = await supabase
+      .from('students')
+      .select('email')
+      .eq('username', username)
+      .maybeSingle();
+
+    if (!student) throw new Error('Invalid credentials');
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: student.email,
+      password,
+    });
+
+    if (error) throw error;
+
+    await loadUserProfile(data.user.id);
+    return { user: data.user };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('token');
+    setSession(null);
   };
 
   const updateUser = (updatedData) => {
@@ -59,9 +109,9 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     user,
-    token,
+    session,
     loading,
-    isAuthenticated: !!token,
+    isAuthenticated: !!session,
     login,
     register,
     logout,
